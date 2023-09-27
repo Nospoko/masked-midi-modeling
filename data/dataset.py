@@ -64,7 +64,7 @@ class MidiDataset(Dataset):
         tgt_token_ids = np.insert(tgt_token_ids, obj=0, values=-100)
 
         return input_token_ids, tgt_token_ids
-    
+
     def add_cls_token(self, input_token_ids: np.ndarray, tgt_token_ids: np.ndarray):
         cls_token = self.tokenizer.token_to_id["<cls>"]
         input_token_ids = np.insert(input_token_ids, obj=0, values=cls_token)
@@ -99,10 +99,11 @@ class MidiDataset(Dataset):
 
 
 if __name__ == "__main__":
-    from data.tokenizer import QuantizedMidiEncoder
     from datasets import load_dataset
     from torch.utils.data import DataLoader
-    from transformers import RobertaForMaskedLM, RobertaConfig
+    from transformers import RobertaConfig, RobertaForMaskedLM
+
+    from data.tokenizer import QuantizedMidiEncoder
 
     ds = load_dataset("JasiekKaczmarczyk/maestro-sustain-quantized", split="train")
 
@@ -117,7 +118,7 @@ if __name__ == "__main__":
     cfg = RobertaConfig(vocab_size=tokenizer.vocab_size)
     m = RobertaForMaskedLM(cfg)
 
-    outputs  = m(
+    outputs = m(
         input_ids=batch["input_token_ids"],
         labels=batch["tgt_token_ids"],
     )
