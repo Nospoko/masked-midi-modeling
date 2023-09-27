@@ -5,20 +5,16 @@ import numpy as np
 from torch.utils.data import Dataset
 from datasets import Dataset as HFDataset
 
-from data.quantizer import MidiQuantizer
-from data.tokenizer import MidiEncoder
-from data.augmentation import change_speed, pitch_shift
 from data.masking import AwesomeMasks
+from data.tokenizer import MidiEncoder
+from data.quantizer import MidiQuantizer
+from data.augmentation import pitch_shift, change_speed
 
 
 class MidiDataset(Dataset):
     def __init__(
-            self, 
-            dataset: HFDataset, 
-            tokenizer: MidiEncoder, 
-            augmentation_probability: float = 0.0, 
-            masking_probability: float = 0.15
-        ):
+        self, dataset: HFDataset, tokenizer: MidiEncoder, augmentation_probability: float = 0.0, masking_probability: float = 0.15
+    ):
         super().__init__()
 
         self.dataset = dataset
@@ -31,7 +27,7 @@ class MidiDataset(Dataset):
 
     def __len__(self):
         return len(self.dataset)
-    
+
     def apply_augmentation(self, record: dict):
         # shift pitch augmentation
         if random.random() < self.augmentation_probability:
@@ -47,17 +43,36 @@ class MidiDataset(Dataset):
             record["duration_bin"] = np.digitize(record["duration"], self.quantizer.duration_bin_edges) - 1
 
         return record
-    
+
     def apply_masking(self, token_ids: np.ndarray, record: dict):
+        input_token_ids = token_ids.copy()
+        tgt_token_ids = token_ids.copy()
+
         # masking, adds new key to record dict called masked
-        masked, _ = self.masks.apply(record, p=self.masking_probability)
+        masked, mask_type = self.masks.apply(record, p=self.masking_probability)
 
-        blank_idx = self.tokenizer.token_to_id["<blank>"]
-        token_ids[masked] = blank_idx
+        # source token ids
+        mask_idx = self.tokenizer.token_to_id["<mask>"]
+        input_token_ids[masked] = mask_idx
 
-        return token_ids
+        # tgt token ids, -100 means loss is not calculated on this token
+        tgt_token_ids[~masked] = -100
 
-    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        # add mask type token
+        mask_type_idx = self.tokenizer.token_to_id[mask_type]
+        input_token_ids = np.insert(input_token_ids, obj=0, values=mask_type_idx)
+        tgt_token_ids = np.insert(tgt_token_ids, obj=0, values=-100)
+
+        return input_token_ids, tgt_token_ids
+    
+    def add_cls_token(self, input_token_ids: np.ndarray, tgt_token_ids: np.ndarray):
+        cls_token = self.tokenizer.token_to_id["<cls>"]
+        input_token_ids = np.insert(input_token_ids, obj=0, values=cls_token)
+        tgt_token_ids = np.insert(tgt_token_ids, obj=0, values=-100)
+
+        return input_token_ids, tgt_token_ids
+
+    def __getitem__(self, index: int) -> dict:
         record = self.dataset[index]
 
         filename = record["midi_filename"]
@@ -69,47 +84,42 @@ class MidiDataset(Dataset):
             record["dstart"] = np.nan_to_num(record["dstart"], copy=False)
 
         record = self.apply_augmentation(record)
-
-        # tokenization
         token_ids = self.tokenizer.encode(record)
+        input_token_ids, tgt_token_ids = self.apply_masking(token_ids, record)
+        input_token_ids, tgt_token_ids = self.add_cls_token(input_token_ids, tgt_token_ids)
 
-        source_token_ids = self.apply_masking(token_ids, record)
-        tgt_token_ids = token_ids.copy()
-
-        # add cls token at the start of sequence
-        cls_token = self.tokenizer.token_to_id["<cls>"]
-        source_token_ids = np.insert(source_token_ids, obj=0, values=cls_token)
-        tgt_token_ids = np.insert(tgt_token_ids, obj=0, values=cls_token)
-
-        record = {
+        tokens = {
             "filename": filename,
-            "source_token_ids": torch.tensor(source_token_ids, dtype=torch.long),
+            "source_token_ids": torch.tensor(token_ids, dtype=torch.long),
+            "input_token_ids": torch.tensor(input_token_ids, dtype=torch.long),
             "tgt_token_ids": torch.tensor(tgt_token_ids, dtype=torch.long),
         }
 
-        return record
+        return tokens
 
-# if __name__ == "__main__":
-#     from omegaconf import DictConfig
-#     from data.tokenizer import QuantizedMidiEncoder
-#     from datasets import load_dataset
-#     from torch.utils.data import DataLoader
-#     from transformers import RobertaForMaskedLM
 
-#     quantization_cfg = DictConfig({
-#         "dstart": 7,
-#         "duration": 7,
-#         "velocity": 7,
-#     })
+if __name__ == "__main__":
+    from data.tokenizer import QuantizedMidiEncoder
+    from datasets import load_dataset
+    from torch.utils.data import DataLoader
+    from transformers import RobertaForMaskedLM, RobertaConfig
 
-#     ds = load_dataset("JasiekKaczmarczyk/maestro-sustain-quantized", split="train")
+    ds = load_dataset("JasiekKaczmarczyk/maestro-sustain-quantized", split="train")
 
-#     tokenizer = QuantizedMidiEncoder(quantization_cfg)
+    tokenizer = QuantizedMidiEncoder(7, 7, 7)
 
-#     dataset = MidiDataset(ds, tokenizer, augmentation_probability=0.1)
+    dataset = MidiDataset(ds, tokenizer, augmentation_probability=0.1)
 
-#     loader = DataLoader(dataset, batch_size=4)
+    loader = DataLoader(dataset, batch_size=4)
 
-#     print(next(iter(loader))["source_token_ids"])
+    batch = next(iter(loader))
 
-#     m = RobertaForMaskedLM()
+    cfg = RobertaConfig(vocab_size=tokenizer.vocab_size)
+    m = RobertaForMaskedLM(cfg)
+
+    outputs  = m(
+        input_ids=batch["input_token_ids"],
+        labels=batch["tgt_token_ids"],
+    )
+
+    print(outputs.loss)

@@ -147,4 +147,3 @@ class AwesomeMasks:
     def vocab(self) -> list[str]:
         vocab = [mask.token for mask in self.masks]
         return vocab
-

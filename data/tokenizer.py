@@ -1,8 +1,8 @@
 import itertools
 
-import pandas as pd
 import numpy as np
-from omegaconf import DictConfig
+import pandas as pd
+from data.masking import AwesomeMasks
 
 
 class MidiEncoder:
@@ -25,11 +25,14 @@ class MidiEncoder:
 
 
 class QuantizedMidiEncoder(MidiEncoder):
-    def __init__(self, quantization_cfg: DictConfig):
-        self.quantization_cfg = quantization_cfg
+    def __init__(self, dstart_bin: int, duration_bin: int, velocity_bin: int):
+        self.dstart_bin = dstart_bin
+        self.duration_bin = duration_bin
+        self.velocity_bin = velocity_bin
 
         self.keys = ["pitch", "dstart_bin", "duration_bin", "velocity_bin"]
-        self.specials = ["<cls>", "<blank>"]
+        self.specials = ["<cls>", "<mask>"]
+        self.mask_tokens = AwesomeMasks().vocab
 
         # ... and add midi tokens
         self.vocab = self._build_vocab()
@@ -45,13 +48,14 @@ class QuantizedMidiEncoder(MidiEncoder):
 
     def _build_vocab(self):
         vocab = list(self.specials)
+        vocab += self.mask_tokens
 
         src_iterators_product = itertools.product(
             # Always include 88 pitches
             range(21, 109),
-            range(self.quantization_cfg.dstart),
-            range(self.quantization_cfg.duration),
-            range(self.quantization_cfg.velocity),
+            range(self.dstart_bin),
+            range(self.duration_bin),
+            range(self.velocity_bin),
         )
 
         for pitch, dstart, duration, velocity in src_iterators_product:
@@ -90,7 +94,8 @@ class QuantizedMidiEncoder(MidiEncoder):
         df = pd.DataFrame(samples, columns=self.keys)
 
         return df
-    
+
+
 # if __name__ == "__main__":
 #     import numpy as np
 

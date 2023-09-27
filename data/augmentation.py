@@ -1,5 +1,7 @@
-import numpy as np
 import random
+
+import numpy as np
+
 
 def change_speed(dstart: np.ndarray, duration: np.ndarray, factor: float = None) -> tuple[np.ndarray, np.ndarray]:
     if not factor:
