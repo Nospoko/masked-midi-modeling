@@ -3,17 +3,17 @@ import os
 import hydra
 import torch
 import wandb
-import torch.nn as nn
 from tqdm import tqdm
 import torch.optim as optim
 from omegaconf import OmegaConf
 from huggingface_hub import upload_file
 from torch.utils.data import Subset, DataLoader
 from datasets import load_dataset, concatenate_datasets
-from transformers import RobertaForMaskedLM, RobertaConfig
+from transformers import RobertaConfig, RobertaForMaskedLM
 
 from data.dataset import MidiDataset
 from data.tokenizer import QuantizedMidiEncoder
+
 
 def makedir_if_not_exists(dir: str):
     if not os.path.exists(dir):
@@ -21,13 +21,14 @@ def makedir_if_not_exists(dir: str):
 
 
 def preprocess_dataset(
-        dataset_name: list[str], 
-        tokenizer: QuantizedMidiEncoder, 
-        batch_size: int, num_workers: int, 
-        augmentation_probability: float, 
-        *, 
-        overfit_single_batch: bool = False
-    ):
+    dataset_name: list[str],
+    tokenizer: QuantizedMidiEncoder,
+    batch_size: int,
+    num_workers: int,
+    augmentation_probability: float,
+    *,
+    overfit_single_batch: bool = False,
+):
     hf_token = os.environ["HUGGINGFACE_TOKEN"]
 
     train_ds = []
@@ -102,9 +103,7 @@ def validation_epoch(
     return metrics
 
 
-def save_checkpoint(
-    model: RobertaForMaskedLM, optimizer: optim.Optimizer, cfg: OmegaConf, save_path: str
-):
+def save_checkpoint(model: RobertaForMaskedLM, optimizer: optim.Optimizer, cfg: OmegaConf, save_path: str):
     # saving models
     torch.save(
         {
