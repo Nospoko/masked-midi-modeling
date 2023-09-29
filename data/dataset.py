@@ -96,31 +96,3 @@ class MidiDataset(Dataset):
         }
 
         return tokens
-
-
-if __name__ == "__main__":
-    from datasets import load_dataset
-    from torch.utils.data import DataLoader
-    from transformers import RobertaConfig, RobertaForMaskedLM
-
-    from data.tokenizer import QuantizedMidiEncoder
-
-    ds = load_dataset("JasiekKaczmarczyk/maestro-sustain-quantized", split="train")
-
-    tokenizer = QuantizedMidiEncoder(7, 7, 7)
-
-    dataset = MidiDataset(ds, tokenizer, augmentation_probability=0.1)
-
-    loader = DataLoader(dataset, batch_size=4)
-
-    batch = next(iter(loader))
-
-    cfg = RobertaConfig(vocab_size=tokenizer.vocab_size)
-    m = RobertaForMaskedLM(cfg)
-
-    outputs = m(
-        input_ids=batch["input_token_ids"],
-        labels=batch["tgt_token_ids"],
-    )
-
-    print(outputs.loss)
