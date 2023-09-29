@@ -31,8 +31,7 @@ class MidiDataset(Dataset):
     def apply_augmentation(self, record: dict):
         # shift pitch augmentation
         if random.random() < self.augmentation_probability:
-            # max shift is octave down or up
-            shift = random.randint(1, 12)
+            shift = 7
             record["pitch"] = pitch_shift(record["pitch"], shift)
 
         # change tempo augmentation

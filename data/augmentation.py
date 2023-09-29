@@ -24,7 +24,7 @@ def pitch_shift(pitch: np.ndarray, shift_threshold: int = 5) -> np.ndarray:
     if low_shift > high_shift:
         shift = 0
     else:
-        shift = random.randint(low_shift, high_shift + 1)
+        shift = random.randint(low_shift, high_shift)
     pitch += shift
 
     return pitch

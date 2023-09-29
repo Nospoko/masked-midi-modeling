@@ -93,7 +93,7 @@ class HarmonicRootMask(Mask):
         absolute_pitch = record["pitch"] % 12
 
         values, counts = np.unique(absolute_pitch, return_counts=True)
-        top_k = np.argpartition(counts, kth=3)[3:]
+        top_k = np.argpartition(counts, kth=2)[2:]
         top_pitches = values[top_k]
         ids = np.isin(absolute_pitch, top_pitches)
         return ids
@@ -118,7 +118,7 @@ class HarmonicOutliersMask(Mask):
         absolute_pitch = record["pitch"] % 12
 
         values, counts = np.unique(absolute_pitch, return_counts=True)
-        top_k = np.argpartition(-counts, kth=3)[3:]
+        top_k = np.argpartition(-counts, kth=2)[2:]
         top_pitches = values[top_k]
         ids = np.isin(absolute_pitch, top_pitches)
         return ids
