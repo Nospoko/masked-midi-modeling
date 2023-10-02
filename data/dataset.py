@@ -23,7 +23,7 @@ class MidiDataset(Dataset):
     ):
         super().__init__()
 
-        self.dataset = dataset
+        self.dataset = dataset.with_format("numpy")
         self.quantizer = quantizer
         self.tokenizer = tokenizer
         self.masks = AwesomeMasks()

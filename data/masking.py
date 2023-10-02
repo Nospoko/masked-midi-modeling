@@ -92,10 +92,9 @@ class HarmonicRootMask(Mask):
         # masking space will be 3 most popular pitches
         absolute_pitch = record["pitch"] % 12
 
-        values, counts = np.unique(absolute_pitch, return_counts=True)
-        top_k = np.argpartition(counts, kth=2)[2:]
-        top_pitches = values[top_k]
-        ids = np.isin(absolute_pitch, top_pitches)
+        counts = np.bincount(absolute_pitch)
+        top_k = np.argsort(-counts)[:3]
+        ids = np.isin(absolute_pitch, top_k)
         return ids
 
 
@@ -117,10 +116,11 @@ class HarmonicOutliersMask(Mask):
         # masking space will be 3 least popular pitches
         absolute_pitch = record["pitch"] % 12
 
-        values, counts = np.unique(absolute_pitch, return_counts=True)
-        top_k = np.argpartition(-counts, kth=2)[2:]
-        top_pitches = values[top_k]
-        ids = np.isin(absolute_pitch, top_pitches)
+        counts = np.bincount(absolute_pitch)
+        # if some pitch was counted 0 times, 100 is added to prevent non existent pitches from being counted as top_k
+        counts = np.where(counts==0, 100, counts)
+        top_k = np.argsort(counts)[:3]
+        ids = np.isin(absolute_pitch, top_k)
         return ids
 
 

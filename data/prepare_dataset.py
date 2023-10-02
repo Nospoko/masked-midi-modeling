@@ -78,7 +78,7 @@ def main():
         test_dataset = dataset["test"]
     elif len(dataset) == 1:
         train_val_test_dataset = dataset["train"].train_test_split(test_size=0.2)
-        val_test_dataset = dataset["test"].train_test_split(test_size=0.5)
+        val_test_dataset = train_val_test_dataset["test"].train_test_split(test_size=0.5)
 
         train_dataset = train_val_test_dataset["train"]
         val_dataset = val_test_dataset["train"]
