@@ -13,16 +13,23 @@ from data.augmentation import pitch_shift, change_speed
 
 class MidiDataset(Dataset):
     def __init__(
-        self, dataset: HFDataset, tokenizer: MidiEncoder, augmentation_probability: float = 0.0, masking_probability: float = 0.15
+        self, 
+        dataset: HFDataset, 
+        tokenizer: MidiEncoder, 
+        quantizer: MidiQuantizer, 
+        pitch_shift_probability: float = 0.0,
+        time_stretch_probability: float = 0.0,
+        masking_probability: float = 0.15,
     ):
         super().__init__()
 
         self.dataset = dataset
-        self.quantizer = MidiQuantizer(7, 7, 7)
+        self.quantizer = quantizer
         self.tokenizer = tokenizer
         self.masks = AwesomeMasks()
 
-        self.augmentation_probability = augmentation_probability
+        self.pitch_shift_probability = pitch_shift_probability
+        self.time_stretch_probability = time_stretch_probability
         self.masking_probability = masking_probability
 
     def __len__(self):
@@ -30,13 +37,13 @@ class MidiDataset(Dataset):
 
     def apply_augmentation(self, record: dict):
         # shift pitch augmentation
-        if random.random() < self.augmentation_probability:
+        if random.random() < self.pitch_shift_probability:
             shift = 7
-            record["pitch"] = pitch_shift(record["pitch"], shift)
+            record["pitch"] = pitch_shift(pitch=record["pitch"], shift_threshold=shift)
 
         # change tempo augmentation
-        if random.random() < self.augmentation_probability:
-            record["dstart"], record["duration"] = change_speed(record["dstart"], record["duration"])
+        if random.random() < self.time_stretch_probability:
+            record["dstart"], record["duration"] = change_speed(dstart=record["dstart"], duration=record["duration"])
             # change bins for new dstart and duration values
             record["dstart_bin"] = np.digitize(record["dstart"], self.quantizer.dstart_bin_edges) - 1
             record["duration_bin"] = np.digitize(record["duration"], self.quantizer.duration_bin_edges) - 1
