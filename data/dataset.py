@@ -13,10 +13,10 @@ from data.augmentation import pitch_shift, change_speed
 
 class MidiDataset(Dataset):
     def __init__(
-        self, 
-        dataset: HFDataset, 
-        tokenizer: MidiEncoder, 
-        quantizer: MidiQuantizer, 
+        self,
+        dataset: HFDataset,
+        quantizer: MidiQuantizer,
+        tokenizer: MidiEncoder,
         pitch_shift_probability: float = 0.0,
         time_stretch_probability: float = 0.0,
         masking_probability: float = 0.15,
@@ -44,9 +44,6 @@ class MidiDataset(Dataset):
         # change tempo augmentation
         if random.random() < self.time_stretch_probability:
             record["dstart"], record["duration"] = change_speed(dstart=record["dstart"], duration=record["duration"])
-            # change bins for new dstart and duration values
-            record["dstart_bin"] = np.digitize(record["dstart"], self.quantizer.dstart_bin_edges) - 1
-            record["duration_bin"] = np.digitize(record["duration"], self.quantizer.duration_bin_edges) - 1
 
         return record
 
@@ -82,14 +79,13 @@ class MidiDataset(Dataset):
         record = self.dataset[index]
 
         filename = record["midi_filename"]
-        # cast list to np array
-        record = {k: np.array(v) for k, v in record.items() if k != "midi_filename"}
 
         # sanity check, replace NaN with 0
         if np.any(np.isnan(record["dstart"])):
             record["dstart"] = np.nan_to_num(record["dstart"], copy=False)
 
         record = self.apply_augmentation(record)
+        record = self.quantizer.quantize_record(record)
         token_ids = self.tokenizer.encode(record)
         input_token_ids, tgt_token_ids = self.apply_masking(token_ids, record)
         input_token_ids, tgt_token_ids = self.add_cls_token(input_token_ids, tgt_token_ids)
@@ -102,3 +98,32 @@ class MidiDataset(Dataset):
         }
 
         return tokens
+
+
+if __name__ == "__main__":
+    from omegaconf import DictConfig
+    from datasets import load_dataset
+    from torch.utils.data import DataLoader
+
+    from data.tokenizer import QuantizedMidiEncoder
+
+    quantization_cfg = DictConfig(
+        {
+            "dstart": 7,
+            "duration": 7,
+            "velocity": 7,
+        }
+    )
+
+    ds = load_dataset("JasiekKaczmarczyk/maestro-v1-sustain-masked", split="train")
+
+    quantizer = MidiQuantizer(7, 7, 7)
+    tokenizer = QuantizedMidiEncoder(7, 7, 7)
+
+    dataset = MidiDataset(ds, quantizer, tokenizer, pitch_shift_probability=0.1, time_stretch_probability=0.1)
+
+    loader = DataLoader(dataset, batch_size=4)
+
+    x = next(iter(loader))
+    print(x["input_token_ids"].shape)
+    print(x["input_token_ids"])
