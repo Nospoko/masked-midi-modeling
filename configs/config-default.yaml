@@ -3,16 +3,22 @@ hydra:
     chdir: False
 
 train:
-  dataset_name: ["JasiekKaczmarczyk/giant-midi-sustain-quantized", "roszcz/pfa-sustain-quantized-7-7-7", "JasiekKaczmarczyk/maestro-sustain-quantized"] # huggingface dataset
+  dataset_name: ["JasiekKaczmarczyk/giant-midi-sustain-masked", "JasiekKaczmarczyk/pianofor-ai-sustain-masked", "JasiekKaczmarczyk/maestro-v1-sustain-masked"] # huggingface dataset
   batch_size: 128
   num_workers: 8
   lr: 3e-4
   weight_decay: 0.01
-  augmentation_probability: 0.5
+  pitch_shift_probability: 0.5
+  time_stretch_probability: 0.5
   num_epochs: 10
   device: "cuda"
   precision: "16-mixed" # not implemented yet
   overfit_single_batch: False
+
+quantization:
+  dstart_bin: 7
+  duration_bin: 7
+  velocity_bin: 7
 
 paths:
   save_ckpt_dir: "checkpoints" # directory where checkpoints will be saved

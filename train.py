@@ -12,6 +12,7 @@ from datasets import load_dataset, concatenate_datasets
 from transformers import RobertaConfig, RobertaForMaskedLM
 
 from data.dataset import MidiDataset
+from data.quantizer import MidiQuantizer
 from data.tokenizer import QuantizedMidiEncoder
 
 
@@ -22,10 +23,12 @@ def makedir_if_not_exists(dir: str):
 
 def preprocess_dataset(
     dataset_name: list[str],
+    quantizer: MidiQuantizer,
     tokenizer: QuantizedMidiEncoder,
     batch_size: int,
     num_workers: int,
-    augmentation_probability: float,
+    pitch_shift_probability: float,
+    time_stretch_probability: float,
     *,
     overfit_single_batch: bool = False,
 ):
@@ -48,9 +51,30 @@ def preprocess_dataset(
     val_ds = concatenate_datasets(val_ds)
     test_ds = concatenate_datasets(test_ds)
 
-    train_ds = MidiDataset(train_ds, tokenizer, augmentation_probability=augmentation_probability, masking_probability=0.15)
-    val_ds = MidiDataset(val_ds, tokenizer, augmentation_probability=0.0, masking_probability=0.15)
-    test_ds = MidiDataset(test_ds, tokenizer, augmentation_probability=0.0, masking_probability=0.15)
+    train_ds = MidiDataset(
+        train_ds, 
+        quantizer, 
+        tokenizer, 
+        pitch_shift_probability=pitch_shift_probability,
+        time_stretch_probability=time_stretch_probability,
+        masking_probability=0.15
+    )
+    val_ds = MidiDataset(
+        val_ds, 
+        quantizer, 
+        tokenizer, 
+        pitch_shift_probability=0.0,
+        time_stretch_probability=0.0,
+        masking_probability=0.15
+    )
+    test_ds = MidiDataset(
+        test_ds, 
+        quantizer, 
+        tokenizer, 
+        pitch_shift_probability=0.0,
+        time_stretch_probability=0.0,
+        masking_probability=0.15
+    )
 
     if overfit_single_batch:
         train_ds = Subset(train_ds, indices=range(batch_size))
@@ -131,25 +155,38 @@ def train(cfg: OmegaConf):
     makedir_if_not_exists(cfg.paths.log_dir)
     makedir_if_not_exists(cfg.paths.save_ckpt_dir)
 
-    tokenizer = QuantizedMidiEncoder(dstart_bin=7, duration_bin=7, velocity_bin=7)
+    quantizer = MidiQuantizer(
+        n_dstart_bins=cfg.quantization.dstart_bin,
+        n_duration_bins=cfg.quantization.duration_bin,
+        n_velocity_bins=cfg.quantization.velocity_bin,
+    )
+    tokenizer = QuantizedMidiEncoder(
+        dstart_bin=cfg.quantization.dstart_bin, 
+        duration_bin=cfg.quantization.duration_bin, 
+        velocity_bin=cfg.quantization.velocity_bin,
+    )
 
     # dataset
     train_dataloader, val_dataloader, _ = preprocess_dataset(
         dataset_name=cfg.train.dataset_name,
+        quantizer=quantizer,
         tokenizer=tokenizer,
         batch_size=cfg.train.batch_size,
         num_workers=cfg.train.num_workers,
-        augmentation_probability=cfg.train.augmentation_probability,
+        pitch_shift_probability=cfg.train.pitch_shift_probability,
+        time_stretch_probability=cfg.train.time_stretch_probability,
         overfit_single_batch=cfg.train.overfit_single_batch,
     )
 
     # validate on quantized maestro
     _, maestro_test, _ = preprocess_dataset(
-        dataset_name=["JasiekKaczmarczyk/maestro-sustain-quantized"],
+        dataset_name=["JasiekKaczmarczyk/maestro-v1-sustain-masked"],
+        quantizer=quantizer,
         tokenizer=tokenizer,
         batch_size=cfg.train.batch_size,
         num_workers=cfg.train.num_workers,
-        augmentation_probability=cfg.train.augmentation_probability,
+        pitch_shift_probability=cfg.train.pitch_shift_probability,
+        time_stretch_probability=cfg.train.time_stretch_probability,
         overfit_single_batch=cfg.train.overfit_single_batch,
     )
 
