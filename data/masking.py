@@ -38,7 +38,7 @@ class LeftHandMask(Mask):
         n_masked = np.random.binomial(record_len, p)
         n_masked = min(n_masked, record_len // 2)
 
-        ids = self.masking_space(record)
+        ids = record["masking_spaces"][self.token]
         to_mask = np.random.choice(np.arange(record_len)[ids], size=n_masked, replace=False)
         masked = np.full_like(record["pitch"], fill_value=False, dtype=bool)
         masked[to_mask] = True
@@ -61,7 +61,7 @@ class RightHandMask(Mask):
         n_masked = np.random.binomial(record_len, p)
         n_masked = min(n_masked, record_len // 2)
 
-        ids = self.masking_space(record)
+        ids = record["masking_spaces"][self.token]
         to_mask = np.random.choice(np.arange(record_len)[ids], size=n_masked, replace=False)
         masked = np.full_like(record["pitch"], fill_value=False, dtype=bool)
         masked[to_mask] = True
@@ -78,7 +78,7 @@ class HarmonicRootMask(Mask):
     token: str = "<Harmonic Root Mask>"
 
     def mask(self, record: dict, p: float) -> np.ndarray:
-        ids = self.masking_space(record)
+        ids = record["masking_spaces"][self.token]
         record_len = len(record["pitch"])
 
         n_masked = min(np.random.binomial(record_len, p), ids.sum())
@@ -92,10 +92,9 @@ class HarmonicRootMask(Mask):
         # masking space will be 3 most popular pitches
         absolute_pitch = record["pitch"] % 12
 
-        values, counts = np.unique(absolute_pitch, return_counts=True)
-        top_k = np.argpartition(counts, kth=2)[2:]
-        top_pitches = values[top_k]
-        ids = np.isin(absolute_pitch, top_pitches)
+        counts = np.bincount(absolute_pitch)
+        top_k = np.argsort(-counts)[:3]
+        ids = np.isin(absolute_pitch, top_k)
         return ids
 
 
@@ -103,7 +102,7 @@ class HarmonicOutliersMask(Mask):
     token: str = "<Harmonic Outliers Mask>"
 
     def mask(self, record: dict, p: float) -> np.ndarray:
-        ids = self.masking_space(record)
+        ids = record["masking_spaces"][self.token]
         record_len = len(record["pitch"])
 
         n_masked = min(np.random.binomial(record_len, p), ids.sum())
@@ -117,10 +116,11 @@ class HarmonicOutliersMask(Mask):
         # masking space will be 3 least popular pitches
         absolute_pitch = record["pitch"] % 12
 
-        values, counts = np.unique(absolute_pitch, return_counts=True)
-        top_k = np.argpartition(-counts, kth=2)[2:]
-        top_pitches = values[top_k]
-        ids = np.isin(absolute_pitch, top_pitches)
+        counts = np.bincount(absolute_pitch)
+        # if some pitch was counted 0 times, 100 is added to prevent non existent pitches from being counted as top_k
+        counts = np.where(counts == 0, 100, counts)
+        top_k = np.argsort(counts)[:3]
+        ids = np.isin(absolute_pitch, top_k)
         return ids
 
 

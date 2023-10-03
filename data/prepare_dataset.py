@@ -1,12 +1,13 @@
 import os
-import argparse
 import json
+import argparse
 
 import fortepyan as ff
 from tqdm import tqdm
 from datasets import Value, Dataset, Features, Sequence, DatasetDict, load_dataset
 
 from data.masking import AwesomeMasks
+
 
 def process_dataset(dataset: Dataset, sequence_len: int, sequence_step: int, masks: AwesomeMasks) -> list[dict]:
     processed_records = []
@@ -26,7 +27,7 @@ def process_record(piece: ff.MidiPiece, sequence_len: int, sequence_step: int, m
     piece.df["dstart"] = piece.df.next_start - piece.df.start
     piece.df["dstart"] = piece.df["dstart"].fillna(0)
 
-    midi_filename = piece.source['midi_filename']
+    midi_filename = piece.source["midi_filename"]
 
     record = []
 
@@ -50,7 +51,7 @@ def process_record(piece: ff.MidiPiece, sequence_len: int, sequence_step: int, m
         for mask in masks.masks:
             # add new keys to sequence corresponding to masking space for each mask type
             masking_spaces[mask.token] = mask.masking_space(sequence)
-        
+
         sequence["masking_spaces"] = masking_spaces
 
         record.append(sequence)
@@ -65,11 +66,10 @@ def main():
     parser.add_argument("--target_dataset_path", type=str, default="JasiekKaczmarczyk/giant-midi-sustain")
     args = parser.parse_args()
 
-
     # get huggingface token from environment variables
     token = os.environ["HUGGINGFACE_TOKEN"]
 
-    dataset = load_dataset(args.source_dataset_path)
+    dataset = load_dataset(args.source_dataset_path, use_auth_token=token)
 
     # if no train/val/test splits
     if len(dataset) == 3:
@@ -78,7 +78,7 @@ def main():
         test_dataset = dataset["test"]
     elif len(dataset) == 1:
         train_val_test_dataset = dataset["train"].train_test_split(test_size=0.2)
-        val_test_dataset = dataset["test"].train_test_split(test_size=0.5)
+        val_test_dataset = train_val_test_dataset["test"].train_test_split(test_size=0.5)
 
         train_dataset = train_val_test_dataset["train"]
         val_dataset = val_test_dataset["train"]
@@ -86,21 +86,23 @@ def main():
 
     else:
         raise KeyError("Dataset split error")
-    
+
     masks = AwesomeMasks()
 
     # building huggingface dataset
-    features = Features({
-        "midi_filename": Value(dtype="string"),
-        "source": Value(dtype="string"),
-        "pitch": Sequence(feature=Value(dtype="int16"), length=args.sequence_len),
-        "dstart": Sequence(feature=Value(dtype="float32"), length=args.sequence_len),
-        "duration": Sequence(feature=Value(dtype="float32"), length=args.sequence_len),
-        "velocity": Sequence(feature=Value(dtype="int16"), length=args.sequence_len),
-        "masking_spaces": Features({
-            mask.token: Sequence(feature=Value(dtype="bool"), length=args.sequence_len) for mask in masks.masks
-        })
-    })
+    features = Features(
+        {
+            "midi_filename": Value(dtype="string"),
+            "source": Value(dtype="string"),
+            "pitch": Sequence(feature=Value(dtype="int16"), length=args.sequence_len),
+            "dstart": Sequence(feature=Value(dtype="float32"), length=args.sequence_len),
+            "duration": Sequence(feature=Value(dtype="float32"), length=args.sequence_len),
+            "velocity": Sequence(feature=Value(dtype="int16"), length=args.sequence_len),
+            "masking_spaces": Features(
+                {mask.token: Sequence(feature=Value(dtype="bool"), length=args.sequence_len) for mask in masks.masks}
+            ),
+        }
+    )
 
     train_records = process_dataset(train_dataset, sequence_len=args.sequence_len, sequence_step=args.sequence_len, masks=masks)
     val_records = process_dataset(val_dataset, sequence_len=args.sequence_len, sequence_step=args.sequence_len, masks=masks)

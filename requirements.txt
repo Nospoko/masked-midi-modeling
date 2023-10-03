@@ -11,3 +11,4 @@ torchmetrics==0.11.0
 tqdm==4.64.1
 transformers==4.26.0
 wandb==0.15.8
+fortepyan==0.2.1
