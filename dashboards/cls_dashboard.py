@@ -1,6 +1,8 @@
 import torch
 import numpy as np
+import seaborn as sns
 import streamlit as st
+import matplotlib.pyplot as plt
 from datasets import load_dataset
 from sklearn.decomposition import PCA
 from sklearn.tree import DecisionTreeClassifier
@@ -39,8 +41,13 @@ def preprocess_dataset(
     return dataloader
 
 
-def accuracy(predicted: np.ndarray, target: np.ndarray):
-    return np.sum(np.equal(predicted, target)) / len(target)
+def plot_embeddings(X: np.ndarray, labels: list[str]):
+    pca = PCA(n_components=2)
+    X_reduced = pca.fit_transform(X)
+
+    fig = plt.figure(figsize=(10, 10))
+    sns.scatterplot(x=X_reduced[:, 0], y=X_reduced[:, 1], hue=labels)
+    st.pyplot(fig)
 
 
 def evaluate_classification(
@@ -78,13 +85,15 @@ def evaluate_classification(
             for s in source:
                 for query in queries:
                     if str.lower(query) in str.lower(s):
-                        labels.append(query_to_id[query])
+                        labels.append(query)
 
     # shape: [num_sequences, vocab_size]
     X = torch.cat(outputs, dim=0).cpu().numpy()
-    y = np.array(labels)
+    y = np.array([query_to_id[q] for q in labels])
 
     assert len(X) == len(y)
+
+    plot_embeddings(X, labels)
 
     # reducing dimensions
     pca = PCA(n_components=128)
