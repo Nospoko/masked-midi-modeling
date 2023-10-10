@@ -78,8 +78,6 @@ class MidiDataset(Dataset):
     def __getitem__(self, index: int) -> dict:
         record = self.dataset[index]
 
-        filename = record["midi_filename"]
-
         # sanity check, replace NaN with 0
         if np.any(np.isnan(record["dstart"])):
             record["dstart"] = np.nan_to_num(record["dstart"], copy=False)
@@ -91,7 +89,8 @@ class MidiDataset(Dataset):
         input_token_ids, tgt_token_ids = self.add_cls_token(input_token_ids, tgt_token_ids)
 
         tokens = {
-            "filename": filename,
+            "filename": record["midi_filename"],
+            "source": record["source"],
             "source_token_ids": torch.tensor(token_ids, dtype=torch.long),
             "input_token_ids": torch.tensor(input_token_ids, dtype=torch.long),
             "tgt_token_ids": torch.tensor(tgt_token_ids, dtype=torch.long),

@@ -10,15 +10,15 @@ train:
   weight_decay: 0.01
   pitch_shift_probability: 0.5
   time_stretch_probability: 0.5
-  num_epochs: 10
+  num_epochs: 5
   device: "cuda"
   precision: "16-mixed" # not implemented yet
   overfit_single_batch: False
 
 quantization:
   dstart_bin: 7
-  duration_bin: 7
-  velocity_bin: 7
+  duration_bin: 3
+  velocity_bin: 3
 
 paths:
   save_ckpt_dir: "checkpoints" # directory where checkpoints will be saved

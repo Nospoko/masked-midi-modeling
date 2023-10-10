@@ -52,28 +52,18 @@ def preprocess_dataset(
     test_ds = concatenate_datasets(test_ds)
 
     train_ds = MidiDataset(
-        train_ds, 
-        quantizer, 
-        tokenizer, 
+        train_ds,
+        quantizer,
+        tokenizer,
         pitch_shift_probability=pitch_shift_probability,
         time_stretch_probability=time_stretch_probability,
-        masking_probability=0.15
+        masking_probability=0.15,
     )
     val_ds = MidiDataset(
-        val_ds, 
-        quantizer, 
-        tokenizer, 
-        pitch_shift_probability=0.0,
-        time_stretch_probability=0.0,
-        masking_probability=0.15
+        val_ds, quantizer, tokenizer, pitch_shift_probability=0.0, time_stretch_probability=0.0, masking_probability=0.15
     )
     test_ds = MidiDataset(
-        test_ds, 
-        quantizer, 
-        tokenizer, 
-        pitch_shift_probability=0.0,
-        time_stretch_probability=0.0,
-        masking_probability=0.15
+        test_ds, quantizer, tokenizer, pitch_shift_probability=0.0, time_stretch_probability=0.0, masking_probability=0.15
     )
 
     if overfit_single_batch:
@@ -161,8 +151,8 @@ def train(cfg: OmegaConf):
         n_velocity_bins=cfg.quantization.velocity_bin,
     )
     tokenizer = QuantizedMidiEncoder(
-        dstart_bin=cfg.quantization.dstart_bin, 
-        duration_bin=cfg.quantization.duration_bin, 
+        dstart_bin=cfg.quantization.dstart_bin,
+        duration_bin=cfg.quantization.duration_bin,
         velocity_bin=cfg.quantization.velocity_bin,
     )
 
