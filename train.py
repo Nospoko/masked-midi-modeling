@@ -83,7 +83,7 @@ def forward_step(
     model: QuantizedMidiEncoder,
     batch: dict[str, torch.Tensor, torch.Tensor, torch.Tensor],
     device: torch.device,
-) -> float:
+):
     input_token_ids = batch["input_token_ids"].to(device)
     tgt_token_ids = batch["tgt_token_ids"].to(device)
 
@@ -92,7 +92,12 @@ def forward_step(
         labels=tgt_token_ids,
     )
 
-    return outputs.loss
+    mlm_scores = outputs.logits
+    mlm_predictions = mlm_scores.argmax(-1)
+    ids = tgt_token_ids != -100
+    mlm_accuracy = torch.mean((mlm_predictions[ids] == tgt_token_ids[ids]).float())
+
+    return outputs.loss, mlm_accuracy
 
 
 @torch.no_grad()
@@ -104,16 +109,18 @@ def validation_epoch(
     # val epoch
     val_loop = tqdm(enumerate(dataloader), total=len(dataloader), leave=False)
     loss_epoch = 0.0
+    mlm_accuracy_epoch = 0.0
 
     for batch_idx, batch in val_loop:
         # metrics returns loss and additional metrics if specified in step function
-        loss = forward_step(model, batch, device)
+        loss, mlm_accuracy = forward_step(model, batch, device)
 
-        val_loop.set_postfix(loss=loss.item())
+        val_loop.set_postfix({"loss": loss.item(), "mlm_accuracy": mlm_accuracy.item()})
 
         loss_epoch += loss.item()
+        mlm_accuracy_epoch += mlm_accuracy.item()
 
-    metrics = {"loss_epoch": loss_epoch / len(dataloader)}
+    metrics = {"loss_epoch": loss_epoch / len(dataloader), "mlm_accuracy_epoch": mlm_accuracy_epoch / len(dataloader)}
     return metrics
 
 
@@ -211,28 +218,33 @@ def train(cfg: OmegaConf):
         model.train()
         train_loop = tqdm(enumerate(train_dataloader), total=len(train_dataloader), leave=False)
         loss_epoch = 0.0
+        mlm_accuracy_epoch = 0.0
 
         for batch_idx, batch in train_loop:
             # metrics returns loss and additional metrics if specified in step function
-            loss = forward_step(model, batch, device)
+            loss, mlm_accuracy = forward_step(model, batch, device)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            train_loop.set_postfix(loss=loss.item())
+            train_loop.set_postfix({"loss": loss.item(), "mlm_accuracy": mlm_accuracy.item()})
 
             step_count += 1
             loss_epoch += loss.item()
+            mlm_accuracy_epoch += mlm_accuracy.item()
 
             if (batch_idx + 1) % cfg.logger.log_every_n_steps == 0:
                 # log metrics
-                wandb.log({"train/loss": loss.item()}, step=step_count)
+                wandb.log({"train/loss": loss.item(), "train/mlm_accuracy": mlm_accuracy.item()}, step=step_count)
 
                 # save model and optimizer states
                 save_checkpoint(model, optimizer, cfg, save_path=save_path)
 
-        training_metrics = {"train/loss_epoch": loss_epoch / len(train_dataloader)}
+        training_metrics = {
+            "train/loss_epoch": loss_epoch / len(train_dataloader), 
+            "train/mlm_accuracy_epoch": mlm_accuracy_epoch / len(train_dataloader)
+        }
 
         model.eval()
 
