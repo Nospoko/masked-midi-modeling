@@ -8,6 +8,7 @@ from sklearn.decomposition import PCA
 from sklearn.tree import DecisionTreeClassifier
 from torch.utils.data import Subset, DataLoader
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
 from transformers import RobertaConfig, RobertaForMaskedLM
 
 from data.dataset import MidiDataset
@@ -47,6 +48,11 @@ def plot_embeddings(X: np.ndarray, labels: list[str]):
 
     fig = plt.figure(figsize=(10, 10))
     sns.scatterplot(x=X_reduced[:, 0], y=X_reduced[:, 1], hue=labels)
+    st.pyplot(fig)
+
+def plot_confusion_matrix(cm: np.ndarray):
+    fig = plt.figure(figsize=(10, 10))
+    sns.heatmap(cm, annot=True)
     st.pyplot(fig)
 
 
@@ -105,13 +111,15 @@ def evaluate_classification(
     tree.fit(X_train, y_train)
 
     acc = tree.score(X_test, y_test)
+    cm = confusion_matrix(tree.predict(X_test), y_test)
+    plot_confusion_matrix(cm)
 
     return acc
 
 
 def main():
     checkpoint = torch.load(
-        "checkpoints/masked-midi-modelling-2023-10-06-10-36-params-87.88M.ckpt"
+        "checkpoints/masked-midi-modelling-2023-10-15-10-19-params-90.31M.ckpt"
         # "checkpoints/pianomask_2023_10_08_19_10.pt"
     )
 

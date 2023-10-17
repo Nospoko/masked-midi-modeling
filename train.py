@@ -188,7 +188,7 @@ def train(cfg: OmegaConf):
     )
 
     # logger
-    wandb.init(project="masked-midi-modelling", name=cfg.logger.run_name, dir=cfg.paths.log_dir)
+    wandb.init(project="masked-midi-modelling", name=cfg.logger.run_name, dir=cfg.paths.log_dir, config=cfg)
 
     device = torch.device(cfg.train.device)
 
@@ -242,8 +242,8 @@ def train(cfg: OmegaConf):
                 save_checkpoint(model, optimizer, cfg, save_path=save_path)
 
         training_metrics = {
-            "train/loss_epoch": loss_epoch / len(train_dataloader), 
-            "train/mlm_accuracy_epoch": mlm_accuracy_epoch / len(train_dataloader)
+            "train/loss_epoch": loss_epoch / len(train_dataloader),
+            "train/mlm_accuracy_epoch": mlm_accuracy_epoch / len(train_dataloader),
         }
 
         model.eval()
