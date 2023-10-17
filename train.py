@@ -1,4 +1,5 @@
 import os
+import time
 
 import hydra
 import torch
@@ -188,7 +189,7 @@ def train(cfg: OmegaConf):
     )
 
     # logger
-    wandb.init(project="masked-midi-modelling", name=cfg.logger.run_name, dir=cfg.paths.log_dir, config=cfg)
+    wandb.init(project="masked-midi-modelling", name=cfg.logger.run_name, dir=cfg.paths.log_dir, config=OmegaConf.to_container(cfg, resolve=True))
 
     device = torch.device(cfg.train.device)
 
@@ -221,6 +222,7 @@ def train(cfg: OmegaConf):
         mlm_accuracy_epoch = 0.0
 
         for batch_idx, batch in train_loop:
+            t0 = time.time()
             # metrics returns loss and additional metrics if specified in step function
             loss, mlm_accuracy = forward_step(model, batch, device)
 
@@ -235,8 +237,18 @@ def train(cfg: OmegaConf):
             mlm_accuracy_epoch += mlm_accuracy.item()
 
             if (batch_idx + 1) % cfg.logger.log_every_n_steps == 0:
+                tokens_per_step = batch["input_token_ids"].numel()
+                time_per_step = time.time() - t0
+
+                stats = {
+                    "train/loss": loss.item(), 
+                    "train/mlm_accuracy": mlm_accuracy.item(),
+                    "stats/tokens_processed": step_count * tokens_per_step,
+                    "stats/time_per_step": time_per_step,
+                }
+
                 # log metrics
-                wandb.log({"train/loss": loss.item(), "train/mlm_accuracy": mlm_accuracy.item()}, step=step_count)
+                wandb.log(stats, step=step_count)
 
                 # save model and optimizer states
                 save_checkpoint(model, optimizer, cfg, save_path=save_path)
