@@ -1,3 +1,5 @@
+from glob import glob
+
 import torch
 import numpy as np
 import seaborn as sns
@@ -5,10 +7,10 @@ import streamlit as st
 import matplotlib.pyplot as plt
 from datasets import load_dataset
 from sklearn.decomposition import PCA
+from sklearn.metrics import confusion_matrix
 from sklearn.tree import DecisionTreeClassifier
 from torch.utils.data import Subset, DataLoader
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix
 from transformers import RobertaConfig, RobertaForMaskedLM
 
 from data.dataset import MidiDataset
@@ -21,25 +23,20 @@ def preprocess_dataset(
     quantizer: MidiQuantizer,
     tokenizer: QuantizedMidiEncoder,
     queries: list[str],
-    batch_size: int,
-    num_workers: int,
 ):
     dataset = load_dataset(dataset_name, split="validation")
 
     ds = MidiDataset(dataset, quantizer, tokenizer, masking_probability=0.0)
 
-    idx = []
+    idx = {}
 
     for query in queries:
-        idx_query = [i for i, name in enumerate(ds.dataset["source"]) if str.lower(query) in str.lower(name)]
-        idx += idx_query
+        idx_query = {i: query for i, name in enumerate(ds.dataset["source"]) if str.lower(query) in str.lower(name)}
+        idx.update(idx_query)
 
-    ds = Subset(ds, indices=idx)
+    ds = Subset(ds, indices=list(idx.keys()))
 
-    # dataloaders
-    dataloader = DataLoader(ds, batch_size=batch_size, num_workers=num_workers, shuffle=False)
-
-    return dataloader
+    return ds, idx
 
 
 def plot_embeddings(X: np.ndarray, labels: list[str]):
@@ -50,9 +47,16 @@ def plot_embeddings(X: np.ndarray, labels: list[str]):
     sns.scatterplot(x=X_reduced[:, 0], y=X_reduced[:, 1], hue=labels)
     st.pyplot(fig)
 
+
 def plot_confusion_matrix(cm: np.ndarray):
     fig = plt.figure(figsize=(10, 10))
     sns.heatmap(cm, annot=True)
+    st.pyplot(fig)
+
+
+def plot_class_balance(y: np.ndarray):
+    fig = plt.figure(figsize=(10, 10))
+    sns.countplot(x=y)
     st.pyplot(fig)
 
 
@@ -64,23 +68,20 @@ def evaluate_classification(
     queries: list[str],
     device: torch.device,
 ):
-    dataloader = preprocess_dataset(
+    ds, idx_to_query = preprocess_dataset(
         dataset_name,
         quantizer=quantizer,
         tokenizer=tokenizer,
         queries=queries,
-        batch_size=1024,
-        num_workers=8,
     )
-    query_to_id = {k: i for i, k in enumerate(queries)}
+    query_to_label = {k: i for i, k in enumerate(queries)}
+
+    dataloader = DataLoader(ds, batch_size=1024, num_workers=8, shuffle=False)
 
     outputs = []
-    labels = []
 
-    # velocity time encoding
     for batch in dataloader:
         with torch.no_grad():
-            source = batch["source"]
             input_token_ids = batch["input_token_ids"].to(device)
 
             # shape [batch_size, seq_len, vocab_size]
@@ -88,17 +89,14 @@ def evaluate_classification(
             cls_embedding = out[:, 0, :]
             outputs.append(cls_embedding)
 
-            for s in source:
-                for query in queries:
-                    if str.lower(query) in str.lower(s):
-                        labels.append(query)
-
     # shape: [num_sequences, vocab_size]
     X = torch.cat(outputs, dim=0).cpu().numpy()
-    y = np.array([query_to_id[q] for q in labels])
+    labels = np.array(list(idx_to_query.values()))
+    y = np.array([query_to_label[q] for q in labels])
 
-    assert len(X) == len(y)
+    # assert len(X) == len(y)
 
+    plot_class_balance(labels)
     plot_embeddings(X, labels)
 
     # reducing dimensions
@@ -118,10 +116,10 @@ def evaluate_classification(
 
 
 def main():
-    checkpoint = torch.load(
-        "checkpoints/masked-midi-modelling-2023-10-15-10-19-params-90.31M.ckpt"
-        # "checkpoints/pianomask_2023_10_08_19_10.pt"
-    )
+    available_checkpoints = glob("checkpoints/*pt")
+    ckpt_path = st.selectbox(label="Available Checkpoints", options=available_checkpoints)
+
+    checkpoint = torch.load(ckpt_path)
 
     cfg = checkpoint["config"]
     device = cfg.train.device
@@ -146,7 +144,7 @@ def main():
 
     dataset_name = "JasiekKaczmarczyk/maestro-v1-sustain-masked"
 
-    queries_txt = st.text_input(label="Queries")
+    queries_txt = st.text_input(label="Queries", value="chopin;mozart")
     queries = str.split(queries_txt, sep=";")
 
     acc = evaluate_classification(

@@ -3,7 +3,6 @@ import time
 
 import hydra
 import torch
-import wandb
 from tqdm import tqdm
 import torch.optim as optim
 from omegaconf import OmegaConf
@@ -12,6 +11,7 @@ from torch.utils.data import Subset, DataLoader
 from datasets import load_dataset, concatenate_datasets
 from transformers import RobertaConfig, RobertaForMaskedLM
 
+import wandb
 from data.dataset import MidiDataset
 from data.quantizer import MidiQuantizer
 from data.tokenizer import QuantizedMidiEncoder
@@ -189,7 +189,12 @@ def train(cfg: OmegaConf):
     )
 
     # logger
-    wandb.init(project="masked-midi-modelling", name=cfg.logger.run_name, dir=cfg.paths.log_dir, config=OmegaConf.to_container(cfg, resolve=True))
+    wandb.init(
+        project="masked-midi-modelling",
+        name=cfg.logger.run_name,
+        dir=cfg.paths.log_dir,
+        config=OmegaConf.to_container(cfg, resolve=True),
+    )
 
     device = torch.device(cfg.train.device)
 
@@ -238,12 +243,13 @@ def train(cfg: OmegaConf):
 
             if (batch_idx + 1) % cfg.logger.log_every_n_steps == 0:
                 tokens_per_step = batch["input_token_ids"].numel()
+                tokens_processed = step_count * tokens_per_step
                 time_per_step = time.time() - t0
 
                 stats = {
-                    "train/loss": loss.item(), 
+                    "train/loss": loss.item(),
                     "train/mlm_accuracy": mlm_accuracy.item(),
-                    "stats/tokens_processed": step_count * tokens_per_step,
+                    "stats/tokens_processed": tokens_processed,
                     "stats/time_per_step": time_per_step,
                 }
 
@@ -252,6 +258,11 @@ def train(cfg: OmegaConf):
 
                 # save model and optimizer states
                 save_checkpoint(model, optimizer, cfg, save_path=save_path)
+
+                # break if it reached token limit
+                if cfg.train.max_tokens_processed is not None and tokens_processed > cfg.train.max_tokens_processed:
+                    wandb.finish()
+                    return
 
         training_metrics = {
             "train/loss_epoch": loss_epoch / len(train_dataloader),
