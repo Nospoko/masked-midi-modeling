@@ -78,8 +78,6 @@ class MidiDataset(Dataset):
     def __getitem__(self, index: int) -> dict:
         record = self.dataset[index]
 
-        filename = record["midi_filename"]
-
         # sanity check, replace NaN with 0
         if np.any(np.isnan(record["dstart"])):
             record["dstart"] = np.nan_to_num(record["dstart"], copy=False)
@@ -91,39 +89,11 @@ class MidiDataset(Dataset):
         input_token_ids, tgt_token_ids = self.add_cls_token(input_token_ids, tgt_token_ids)
 
         tokens = {
-            "filename": filename,
+            "filename": record["midi_filename"],
+            "source": record["source"],
             "source_token_ids": torch.tensor(token_ids, dtype=torch.long),
             "input_token_ids": torch.tensor(input_token_ids, dtype=torch.long),
             "tgt_token_ids": torch.tensor(tgt_token_ids, dtype=torch.long),
         }
 
         return tokens
-
-
-if __name__ == "__main__":
-    from omegaconf import DictConfig
-    from datasets import load_dataset
-    from torch.utils.data import DataLoader
-
-    from data.tokenizer import QuantizedMidiEncoder
-
-    quantization_cfg = DictConfig(
-        {
-            "dstart": 7,
-            "duration": 7,
-            "velocity": 7,
-        }
-    )
-
-    ds = load_dataset("JasiekKaczmarczyk/maestro-v1-sustain-masked", split="train")
-
-    quantizer = MidiQuantizer(7, 7, 7)
-    tokenizer = QuantizedMidiEncoder(7, 7, 7)
-
-    dataset = MidiDataset(ds, quantizer, tokenizer, pitch_shift_probability=0.1, time_stretch_probability=0.1)
-
-    loader = DataLoader(dataset, batch_size=4)
-
-    x = next(iter(loader))
-    print(x["input_token_ids"].shape)
-    print(x["input_token_ids"])
